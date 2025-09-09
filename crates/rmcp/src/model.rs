@@ -1195,7 +1195,12 @@ pub struct CreateElicitationRequestParam {
     /// JSON Schema defining the expected structure and validation rules for the user's response.
     /// This allows clients to validate input and provide appropriate UI controls.
     /// Must be a valid JSON Schema Draft 2020-12 object.
-    pub requested_schema: JsonObject,
+    #[serde(default)]
+    pub requested_schema: Option<JsonObject>,
+    pub mode: String,
+    pub elicitation_id: String,
+    #[serde(default)]
+    pub url: Option<String>
 }
 
 /// The result returned by a client in response to an elicitation request.
