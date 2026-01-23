@@ -170,7 +170,7 @@ pub mod transport;
 pub use pastey::paste;
 #[cfg(all(feature = "macros", feature = "server"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "macros", feature = "server"))))]
-pub use rmcp_macros::*;
+pub use legacy_rmcp_macros::*;
 #[cfg(all(feature = "macros", feature = "server"))]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "macros", feature = "server"))))]
 pub use schemars;
