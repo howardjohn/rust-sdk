@@ -23,7 +23,7 @@ futures = "0.3"
 tracing = { version = "0.1" }
 tokio-util = { version = "0.7" }
 pin-project-lite = "0.2"
-pastey = { version = "0.2.0", optional = true }
+pastey = { version = "0.2.0" }
 # oauth2 support
 oauth2 = { version = "5.0", optional = true }
 
@@ -78,7 +78,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
 default = ["base64", "macros", "server"]
 client = ["dep:tokio-stream"]
 server = ["transport-async-rw", "dep:schemars"]
-macros = ["dep:rmcp-macros", "dep:pastey"]
+macros = ["dep:rmcp-macros"]
 elicitation = []
 
 # reqwest http client

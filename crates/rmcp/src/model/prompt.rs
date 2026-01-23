@@ -1,3 +1,4 @@
+#[cfg(feature = "base64")]
 use base64::engine::{Engine, general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
 
