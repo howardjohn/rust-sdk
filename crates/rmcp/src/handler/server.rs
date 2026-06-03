@@ -107,6 +107,10 @@ impl<H: ServerHandler> Service<RoleServer> for H {
                 .list_tools(request.params, context)
                 .await
                 .map(ServerResult::ListToolsResult),
+            ClientRequest::DiscoverRequest(request) => self
+                .discover(request.params, context)
+                .await
+                .map(ServerResult::DiscoverResult),
             ClientRequest::CustomRequest(request) => self
                 .on_custom_request(request, context)
                 .await
@@ -123,6 +127,10 @@ impl<H: ServerHandler> Service<RoleServer> for H {
                 .get_task_result(request.params, context)
                 .await
                 .map(ServerResult::GetTaskPayloadResult),
+            ClientRequest::UpdateTaskRequest(request) => self
+                .update_task(request.params, context)
+                .await
+                .map(ServerResult::TaskResult),
             ClientRequest::CancelTaskRequest(request) => self
                 .cancel_task(request.params, context)
                 .await
@@ -272,6 +280,23 @@ macro_rules! server_handler_methods {
         ) -> impl Future<Output = Result<ListToolsResult, McpError>> + MaybeSendFuture + '_ {
             std::future::ready(Ok(ListToolsResult::default()))
         }
+        fn discover(
+            &self,
+            request: DiscoverRequestParams,
+            context: RequestContext<RoleServer>,
+        ) -> impl Future<Output = Result<DiscoverResult, McpError>> + MaybeSendFuture + '_ {
+            let _ = (request, context);
+            let info = self.get_info();
+            std::future::ready(Ok(DiscoverResult {
+                result_type: Some(ResultType::Complete),
+                supported_versions: ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+                capabilities: info.capabilities,
+                server_info: info.server_info,
+                extensions: None,
+                instructions: info.instructions,
+                extra: JsonObject::new(),
+            }))
+        }
         /// Get a tool definition by name.
         ///
         /// The default implementation returns `None`, which bypasses validation.
@@ -357,6 +382,15 @@ macro_rules! server_handler_methods {
         ) -> impl Future<Output = Result<GetTaskPayloadResult, McpError>> + MaybeSendFuture + '_ {
             let _ = (request, context);
             std::future::ready(Err(McpError::method_not_found::<GetTaskResultMethod>()))
+        }
+
+        fn update_task(
+            &self,
+            request: UpdateTaskParams,
+            context: RequestContext<RoleServer>,
+        ) -> impl Future<Output = Result<TaskResult, McpError>> + MaybeSendFuture + '_ {
+            let _ = (request, context);
+            std::future::ready(Err(McpError::method_not_found::<UpdateTaskMethod>()))
         }
 
         fn cancel_task(
@@ -497,6 +531,14 @@ macro_rules! impl_server_handler_for_wrapper {
                 (**self).list_tools(request, context)
             }
 
+            fn discover(
+                &self,
+                request: DiscoverRequestParams,
+                context: RequestContext<RoleServer>,
+            ) -> impl Future<Output = Result<DiscoverResult, McpError>> + MaybeSendFuture + '_ {
+                (**self).discover(request, context)
+            }
+
             fn get_tool(&self, name: &str) -> Option<Tool> {
                 (**self).get_tool(name)
             }
@@ -573,6 +615,14 @@ macro_rules! impl_server_handler_for_wrapper {
                 context: RequestContext<RoleServer>,
             ) -> impl Future<Output = Result<GetTaskPayloadResult, McpError>> + MaybeSendFuture + '_ {
                 (**self).get_task_result(request, context)
+            }
+
+            fn update_task(
+                &self,
+                request: UpdateTaskParams,
+                context: RequestContext<RoleServer>,
+            ) -> impl Future<Output = Result<TaskResult, McpError>> + MaybeSendFuture + '_ {
+                (**self).update_task(request, context)
             }
 
             fn cancel_task(

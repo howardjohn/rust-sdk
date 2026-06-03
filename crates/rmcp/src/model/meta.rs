@@ -2,10 +2,12 @@ use std::ops::{Deref, DerefMut};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use thiserror::Error;
 
 use super::{
-    ClientNotification, ClientRequest, CustomNotification, CustomRequest, Extensions, JsonObject,
-    JsonRpcMessage, NumberOrString, ProgressToken, ServerNotification, ServerRequest,
+    ClientCapabilities, ClientNotification, ClientRequest, CustomNotification, CustomRequest,
+    Extensions, Implementation, JsonObject, JsonRpcMessage, LoggingLevel, NumberOrString,
+    ProgressToken, ProtocolVersion, ServerNotification, ServerRequest,
 };
 
 pub trait GetMeta {
@@ -151,8 +153,10 @@ variant_extension! {
         UnsubscribeRequest
         CallToolRequest
         ListToolsRequest
+        DiscoverRequest
         CustomRequest
         GetTaskInfoRequest
+        UpdateTaskRequest
         ListTasksRequest
         GetTaskResultRequest
         CancelTaskRequest
@@ -198,6 +202,37 @@ variant_extension! {
 #[expect(clippy::exhaustive_structs, reason = "intentionally exhaustive")]
 pub struct Meta(pub JsonObject);
 const PROGRESS_TOKEN_FIELD: &str = "progressToken";
+pub const RC_PROTOCOL_VERSION_FIELD: &str = "io.modelcontextprotocol/protocolVersion";
+pub const RC_CLIENT_INFO_FIELD: &str = "io.modelcontextprotocol/clientInfo";
+pub const RC_CLIENT_CAPABILITIES_FIELD: &str = "io.modelcontextprotocol/clientCapabilities";
+pub const RC_LOG_LEVEL_FIELD: &str = "io.modelcontextprotocol/logLevel";
+pub const TRACEPARENT_FIELD: &str = "traceparent";
+pub const TRACESTATE_FIELD: &str = "tracestate";
+pub const BAGGAGE_FIELD: &str = "baggage";
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct RcRequestMeta {
+    pub protocol_version: ProtocolVersion,
+    pub client_info: Implementation,
+    pub client_capabilities: ClientCapabilities,
+    pub log_level: Option<LoggingLevel>,
+    pub extra: JsonObject,
+}
+
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RcMetaError {
+    #[error("missing required RC _meta field {0}")]
+    MissingField(&'static str),
+    #[error("invalid RC _meta field {field}: {message}")]
+    InvalidField {
+        field: &'static str,
+        message: String,
+    },
+}
+
 impl Meta {
     pub fn new() -> Self {
         Self(JsonObject::new())
@@ -250,6 +285,106 @@ impl Meta {
     pub fn extend(&mut self, other: Meta) {
         for (k, v) in other.0.into_iter() {
             self.0.insert(k, v);
+        }
+    }
+
+    pub fn rc_request_meta(&self) -> Result<RcRequestMeta, RcMetaError> {
+        RcRequestMeta::from_meta(self)
+    }
+
+    pub fn set_rc_request_meta(&mut self, meta: RcRequestMeta) {
+        meta.write_to_meta(self);
+    }
+
+    pub fn traceparent(&self) -> Option<&str> {
+        self.0.get(TRACEPARENT_FIELD).and_then(Value::as_str)
+    }
+
+    pub fn tracestate(&self) -> Option<&str> {
+        self.0.get(TRACESTATE_FIELD).and_then(Value::as_str)
+    }
+
+    pub fn baggage(&self) -> Option<&str> {
+        self.0.get(BAGGAGE_FIELD).and_then(Value::as_str)
+    }
+}
+
+impl RcRequestMeta {
+    pub fn from_meta(meta: &Meta) -> Result<Self, RcMetaError> {
+        fn required<T: for<'de> Deserialize<'de>>(
+            meta: &Meta,
+            field: &'static str,
+        ) -> Result<T, RcMetaError> {
+            let value = meta
+                .0
+                .get(field)
+                .cloned()
+                .ok_or(RcMetaError::MissingField(field))?;
+            serde_json::from_value(value).map_err(|e| RcMetaError::InvalidField {
+                field,
+                message: e.to_string(),
+            })
+        }
+
+        let protocol_version = required(meta, RC_PROTOCOL_VERSION_FIELD)?;
+        let client_info = required(meta, RC_CLIENT_INFO_FIELD)?;
+        let client_capabilities = required(meta, RC_CLIENT_CAPABILITIES_FIELD)?;
+        let log_level = meta
+            .0
+            .get(RC_LOG_LEVEL_FIELD)
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| RcMetaError::InvalidField {
+                field: RC_LOG_LEVEL_FIELD,
+                message: e.to_string(),
+            })?;
+
+        let extra = meta
+            .0
+            .iter()
+            .filter(|(key, _)| {
+                !matches!(
+                    key.as_str(),
+                    RC_PROTOCOL_VERSION_FIELD
+                        | RC_CLIENT_INFO_FIELD
+                        | RC_CLIENT_CAPABILITIES_FIELD
+                        | RC_LOG_LEVEL_FIELD
+                )
+            })
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+
+        Ok(Self {
+            protocol_version,
+            client_info,
+            client_capabilities,
+            log_level,
+            extra,
+        })
+    }
+
+    pub fn write_to_meta(self, meta: &mut Meta) {
+        meta.0.extend(self.extra);
+        meta.0.insert(
+            RC_PROTOCOL_VERSION_FIELD.to_string(),
+            Value::String(self.protocol_version.to_string()),
+        );
+        meta.0.insert(
+            RC_CLIENT_INFO_FIELD.to_string(),
+            serde_json::to_value(self.client_info)
+                .expect("Implementation serializes to a JSON value"),
+        );
+        meta.0.insert(
+            RC_CLIENT_CAPABILITIES_FIELD.to_string(),
+            serde_json::to_value(self.client_capabilities)
+                .expect("ClientCapabilities serializes to a JSON value"),
+        );
+        if let Some(log_level) = self.log_level {
+            meta.0.insert(
+                RC_LOG_LEVEL_FIELD.to_string(),
+                serde_json::to_value(log_level).expect("LoggingLevel serializes to a JSON value"),
+            );
         }
     }
 }

@@ -629,6 +629,8 @@ mod tests {
                 name: Cow::Borrowed("test_tool"),
                 arguments: None,
                 task: None,
+                input_responses: None,
+                request_state: None,
             },
             RequestContext::new(NumberOrString::Number(1), peer),
         );

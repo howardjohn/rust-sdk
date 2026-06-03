@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::Meta;
+use super::{ErrorData, JsonObject, Meta, ResultType};
 
 /// Canonical task lifecycle status as defined by SEP-1686.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -95,6 +95,81 @@ impl Task {
 #[non_exhaustive]
 pub struct CreateTaskResult {
     pub task: Task,
+}
+
+/// RC task extension terminal result (`resultType: "task"`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct TaskResult {
+    #[serde(rename = "resultType")]
+    pub result_type: ResultType,
+    pub task_id: String,
+    pub status: TaskStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_updated_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub poll_interval_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ErrorData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_requests: Option<Value>,
+    #[serde(flatten)]
+    pub extra: JsonObject,
+}
+
+impl<'de> Deserialize<'de> for TaskResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Helper {
+            #[serde(rename = "resultType")]
+            result_type: ResultType,
+            task_id: String,
+            status: TaskStatus,
+            status_message: Option<String>,
+            created_at: Option<String>,
+            last_updated_at: Option<String>,
+            ttl_ms: Option<u64>,
+            poll_interval_ms: Option<u64>,
+            result: Option<Value>,
+            error: Option<ErrorData>,
+            input_requests: Option<Value>,
+            #[serde(flatten)]
+            extra: JsonObject,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        if helper.result_type != ResultType::Task {
+            return Err(serde::de::Error::custom("expected resultType \"task\""));
+        }
+        Ok(Self {
+            result_type: helper.result_type,
+            task_id: helper.task_id,
+            status: helper.status,
+            status_message: helper.status_message,
+            created_at: helper.created_at,
+            last_updated_at: helper.last_updated_at,
+            ttl_ms: helper.ttl_ms,
+            poll_interval_ms: helper.poll_interval_ms,
+            result: helper.result,
+            error: helper.error,
+            input_requests: helper.input_requests,
+            extra: helper.extra,
+        })
+    }
 }
 
 impl CreateTaskResult {
