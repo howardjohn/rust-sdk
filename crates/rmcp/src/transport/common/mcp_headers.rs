@@ -171,7 +171,7 @@ fn reject_nested_annotations(schema: &Value, path: &str) -> Result<(), String> {
 
 /// Wraps a value as `=?base64?<b64>?=` when it cannot travel as a bare header value.
 #[cfg(feature = "client-side-sse")]
-fn encode_header_value(value: &str) -> String {
+pub fn encode_header_value(value: &str) -> String {
     use base64::{Engine, prelude::BASE64_STANDARD};
     if requires_base64(value) {
         format!(
@@ -185,7 +185,7 @@ fn encode_header_value(value: &str) -> String {
 
 /// Reverses [`encode_header_value`]. Returns `None` if the sentinel wraps invalid Base64/UTF-8.
 #[cfg(feature = "server-side-http")]
-fn decode_header_value(value: &str) -> Option<String> {
+pub fn decode_header_value(value: &str) -> Option<String> {
     use base64::{Engine, prelude::BASE64_STANDARD};
     match value
         .strip_prefix(BASE64_HEADER_PREFIX)

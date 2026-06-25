@@ -178,6 +178,7 @@ pub trait ClientHandler: Sized + Send + Sync + 'static {
             action: ElicitationAction::Decline,
             content: None,
             meta: None,
+            result_type: Some(crate::model::ResultType::COMPLETE),
         }))
     }
 
