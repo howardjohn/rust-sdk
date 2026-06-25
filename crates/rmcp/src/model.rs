@@ -708,6 +708,48 @@ impl CustomResult {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct ResultType(Cow<'static, str>);
+
+impl Default for ResultType {
+    fn default() -> Self {
+        Self::COMPLETE
+    }
+}
+
+impl ResultType {
+    pub const COMPLETE: Self = Self(Cow::Borrowed("complete"));
+    pub const INPUT_REQUIRED: Self = Self(Cow::Borrowed("input_required"));
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Serialize for ResultType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ResultType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        match s.as_str() {
+            "complete" => Ok(ResultType::COMPLETE),
+            "input_required" => Ok(ResultType::INPUT_REQUIRED),
+            _ => Ok(ResultType(Cow::Owned(s))),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
@@ -811,6 +853,74 @@ impl CustomRequest {
             .as_ref()
             .map(|params| serde_json::from_value(params.clone()))
             .transpose()
+    }
+}
+
+const_string!(DiscoverRequestMethod = "server/discover");
+
+/// Sent from the client to discover server identity, capabilities, and supported protocol versions.
+pub type DiscoverRequest = Request<DiscoverRequestMethod, EmptyObject>;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct DiscoverResult {
+    #[serde(rename = "resultType", default)]
+    pub result_type: ResultType,
+    pub supported_versions: Vec<ProtocolVersion>,
+    pub capabilities: ServerCapabilities,
+    pub server_info: Implementation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_ttl_ms",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ttl_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_scope: Option<CacheScope>,
+    #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
+
+impl DiscoverResult {
+    pub fn new(
+        supported_versions: impl Into<Vec<ProtocolVersion>>,
+        capabilities: ServerCapabilities,
+    ) -> Self {
+        Self {
+            result_type: ResultType::COMPLETE,
+            supported_versions: supported_versions.into(),
+            capabilities,
+            server_info: Implementation::from_build_env(),
+            instructions: None,
+            ttl_ms: None,
+            cache_scope: None,
+            meta: None,
+        }
+    }
+
+    pub fn with_server_info(mut self, server_info: Implementation) -> Self {
+        self.server_info = server_info;
+        self
+    }
+
+    pub fn with_instructions(mut self, instructions: impl Into<String>) -> Self {
+        self.instructions = Some(instructions.into());
+        self
+    }
+
+    pub fn with_cache(mut self, ttl_ms: u64, cache_scope: CacheScope) -> Self {
+        self.ttl_ms = Some(ttl_ms);
+        self.cache_scope = Some(cache_scope);
+        self
+    }
+
+    pub fn with_meta(mut self, meta: Meta) -> Self {
+        self.meta = Some(meta);
+        self
     }
 }
 
@@ -3653,6 +3763,7 @@ macro_rules! ts_union {
 
 ts_union!(
     export type ClientRequest =
+    | DiscoverRequest
     | PingRequest
     | InitializeRequest
     | CompleteRequest
@@ -3676,6 +3787,7 @@ ts_union!(
 impl ClientRequest {
     pub fn method(&self) -> &str {
         match &self {
+            ClientRequest::DiscoverRequest(r) => r.method.as_str(),
             ClientRequest::PingRequest(r) => r.method.as_str(),
             ClientRequest::InitializeRequest(r) => r.method.as_str(),
             ClientRequest::CompleteRequest(r) => r.method.as_str(),
@@ -3750,6 +3862,7 @@ ts_union!(
 
 ts_union!(
     export type ServerResult =
+    | DiscoverResult
     | InitializeResult
     | CompleteResult
     | GetPromptResult
