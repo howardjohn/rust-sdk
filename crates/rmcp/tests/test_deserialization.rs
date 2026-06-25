@@ -1,5 +1,6 @@
 use rmcp::model::{
-    ClientJsonRpcMessage, ClientRequest, JsonRpcResponse, ServerJsonRpcMessage, ServerResult,
+    CallToolRequestParams, ClientJsonRpcMessage, ClientRequest, GetPromptRequestParams,
+    JsonRpcResponse, ReadResourceRequestParams, ServerJsonRpcMessage, ServerResult,
 };
 use serde_json::json;
 
@@ -46,6 +47,93 @@ fn test_discover_result() {
             ..
         })
     ));
+}
+
+#[test]
+fn test_input_required_result() {
+    let message: ServerJsonRpcMessage = serde_json::from_value(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            "resultType": "input_required",
+            "inputRequests": {
+                "roots": {
+                    "method": "roots/list"
+                }
+            },
+            "requestState": "opaque-state"
+        }
+    }))
+    .unwrap();
+
+    let ServerJsonRpcMessage::Response(JsonRpcResponse {
+        result: ServerResult::InputRequiredResult(result),
+        ..
+    }) = message
+    else {
+        panic!("expected InputRequiredResult");
+    };
+
+    assert_eq!(result.request_state.as_deref(), Some("opaque-state"));
+    assert!(
+        result
+            .input_requests
+            .as_ref()
+            .is_some_and(|requests| requests.contains_key("roots"))
+    );
+}
+
+#[test]
+fn test_mrtr_request_params() {
+    let input = json!({
+        "inputResponses": {
+            "roots": {
+                "roots": []
+            }
+        },
+        "requestState": "opaque-state"
+    });
+
+    let call: CallToolRequestParams = serde_json::from_value(json!({
+        "name": "test_tool",
+        "inputResponses": input["inputResponses"].clone(),
+        "requestState": input["requestState"].clone()
+    }))
+    .unwrap();
+    assert!(
+        call.input_responses
+            .as_ref()
+            .is_some_and(|r| r.contains_key("roots"))
+    );
+    assert_eq!(call.request_state.as_deref(), Some("opaque-state"));
+
+    let resource: ReadResourceRequestParams = serde_json::from_value(json!({
+        "uri": "file:///tmp/test.txt",
+        "inputResponses": input["inputResponses"].clone(),
+        "requestState": input["requestState"].clone()
+    }))
+    .unwrap();
+    assert!(
+        resource
+            .input_responses
+            .as_ref()
+            .is_some_and(|r| r.contains_key("roots"))
+    );
+    assert_eq!(resource.request_state.as_deref(), Some("opaque-state"));
+
+    let prompt: GetPromptRequestParams = serde_json::from_value(json!({
+        "name": "test_prompt",
+        "inputResponses": input["inputResponses"].clone(),
+        "requestState": input["requestState"].clone()
+    }))
+    .unwrap();
+    assert!(
+        prompt
+            .input_responses
+            .as_ref()
+            .is_some_and(|r| r.contains_key("roots"))
+    );
+    assert_eq!(prompt.request_state.as_deref(), Some("opaque-state"));
 }
 
 #[test]

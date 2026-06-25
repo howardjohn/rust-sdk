@@ -3,6 +3,7 @@
 #![expect(deprecated)]
 use std::{
     borrow::Cow,
+    collections::BTreeMap,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -750,6 +751,106 @@ impl<'de> Deserialize<'de> for ResultType {
     }
 }
 
+pub type InputRequests = BTreeMap<String, InputRequest>;
+pub type InputResponses = BTreeMap<String, InputResponse>;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[expect(clippy::exhaustive_enums, reason = "intentionally exhaustive")]
+pub enum InputRequest {
+    CreateMessageRequest(CreateMessageRequest),
+    ListRootsRequest(ListRootsRequest),
+    ElicitRequest(ElicitRequest),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[expect(clippy::exhaustive_enums, reason = "intentionally exhaustive")]
+pub enum InputResponse {
+    CreateMessageResult(Box<CreateMessageResult>),
+    ListRootsResult(ListRootsResult),
+    ElicitResult(ElicitResult),
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct InputRequiredResult {
+    #[serde(rename = "resultType")]
+    pub result_type: ResultType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_requests: Option<InputRequests>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_state: Option<String>,
+    #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
+
+impl<'de> Deserialize<'de> for InputRequiredResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Helper {
+            #[serde(rename = "resultType")]
+            result_type: ResultType,
+            input_requests: Option<InputRequests>,
+            request_state: Option<String>,
+            #[serde(rename = "_meta")]
+            meta: Option<Meta>,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        if helper.result_type != ResultType::INPUT_REQUIRED {
+            return Err(serde::de::Error::custom(
+                "expected resultType \"input_required\"",
+            ));
+        }
+        if helper.input_requests.is_none() && helper.request_state.is_none() {
+            return Err(serde::de::Error::custom(
+                "expected at least one of inputRequests or requestState",
+            ));
+        }
+        Ok(Self {
+            result_type: helper.result_type,
+            input_requests: helper.input_requests,
+            request_state: helper.request_state,
+            meta: helper.meta,
+        })
+    }
+}
+
+impl InputRequiredResult {
+    pub fn new() -> Self {
+        Self {
+            result_type: ResultType::INPUT_REQUIRED,
+            input_requests: None,
+            request_state: None,
+            meta: None,
+        }
+    }
+
+    pub fn with_input_requests(mut self, input_requests: InputRequests) -> Self {
+        self.input_requests = Some(input_requests);
+        self
+    }
+
+    pub fn with_request_state(mut self, request_state: impl Into<String>) -> Self {
+        self.request_state = Some(request_state.into());
+        self
+    }
+
+    pub fn with_meta(mut self, meta: Meta) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
@@ -1406,6 +1507,12 @@ pub struct ReadResourceRequestParams {
     pub meta: Option<Meta>,
     /// The URI of the resource to read
     pub uri: String,
+    /// Responses to server input requests from a prior `InputRequiredResult`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_responses: Option<InputResponses>,
+    /// Opaque request state returned by the server in a prior `InputRequiredResult`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_state: Option<String>,
 }
 
 impl ReadResourceRequestParams {
@@ -1414,12 +1521,24 @@ impl ReadResourceRequestParams {
         Self {
             meta: None,
             uri: uri.into(),
+            input_responses: None,
+            request_state: None,
         }
     }
 
     /// Set the metadata for this request.
     pub fn with_meta(mut self, meta: Meta) -> Self {
         self.meta = Some(meta);
+        self
+    }
+
+    pub fn with_input_responses(mut self, input_responses: InputResponses) -> Self {
+        self.input_responses = Some(input_responses);
+        self
+    }
+
+    pub fn with_request_state(mut self, request_state: impl Into<String>) -> Self {
+        self.request_state = Some(request_state.into());
         self
     }
 }
@@ -1624,6 +1743,12 @@ pub struct GetPromptRequestParams {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<JsonObject>,
+    /// Responses to server input requests from a prior `InputRequiredResult`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_responses: Option<InputResponses>,
+    /// Opaque request state returned by the server in a prior `InputRequiredResult`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_state: Option<String>,
 }
 
 impl GetPromptRequestParams {
@@ -1633,6 +1758,8 @@ impl GetPromptRequestParams {
             meta: None,
             name: name.into(),
             arguments: None,
+            input_responses: None,
+            request_state: None,
         }
     }
 
@@ -1645,6 +1772,16 @@ impl GetPromptRequestParams {
     /// Set the metadata for this request.
     pub fn with_meta(mut self, meta: Meta) -> Self {
         self.meta = Some(meta);
+        self
+    }
+
+    pub fn with_input_responses(mut self, input_responses: InputResponses) -> Self {
+        self.input_responses = Some(input_responses);
+        self
+    }
+
+    pub fn with_request_state(mut self, request_state: impl Into<String>) -> Self {
+        self.request_state = Some(request_state.into());
         self
     }
 }
@@ -3361,6 +3498,12 @@ pub struct CallToolRequestParams {
     /// Task metadata for async task management (SEP-1319)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task: Option<TaskMetadata>,
+    /// Responses to server input requests from a prior `InputRequiredResult`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_responses: Option<InputResponses>,
+    /// Opaque request state returned by the server in a prior `InputRequiredResult`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_state: Option<String>,
 }
 
 impl CallToolRequestParams {
@@ -3371,6 +3514,8 @@ impl CallToolRequestParams {
             name: name.into(),
             arguments: None,
             task: None,
+            input_responses: None,
+            request_state: None,
         }
     }
 
@@ -3383,6 +3528,16 @@ impl CallToolRequestParams {
     /// Sets the task metadata for this tool call.
     pub fn with_task(mut self, task: TaskMetadata) -> Self {
         self.task = Some(task);
+        self
+    }
+
+    pub fn with_input_responses(mut self, input_responses: InputResponses) -> Self {
+        self.input_responses = Some(input_responses);
+        self
+    }
+
+    pub fn with_request_state(mut self, request_state: impl Into<String>) -> Self {
+        self.request_state = Some(request_state.into());
         self
     }
 }
@@ -3877,6 +4032,7 @@ ts_union!(
     | GetTaskResult
     | CancelTaskResult
     | CallToolResult
+    | InputRequiredResult
     | GetTaskPayloadResult
     | EmptyResult
     | CustomResult
