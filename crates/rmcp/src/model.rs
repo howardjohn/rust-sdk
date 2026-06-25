@@ -679,11 +679,56 @@ impl<Req, Resp, Not> JsonRpcMessage<Req, Resp, Not> {
 
 /// # Empty result
 /// A response that indicates success but carries no data.
-pub type EmptyResult = EmptyObject;
+#[derive(Debug, Serialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[expect(clippy::exhaustive_structs, reason = "intentionally exhaustive")]
+pub struct EmptyResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
+    #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+}
+
+impl<'de> Deserialize<'de> for EmptyResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Helper {
+            #[serde(rename = "resultType", default)]
+            result_type: Option<ResultType>,
+            #[serde(rename = "_meta")]
+            meta: Option<Meta>,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        if helper
+            .result_type
+            .as_ref()
+            .is_some_and(|result_type| result_type != &ResultType::COMPLETE)
+        {
+            return Err(serde::de::Error::custom("expected resultType \"complete\""));
+        }
+        Ok(Self {
+            result_type: helper.result_type,
+            meta: helper.meta,
+        })
+    }
+}
 
 impl From<()> for EmptyResult {
     fn from(_value: ()) -> Self {
-        EmptyResult {}
+        EmptyResult {
+            result_type: Some(ResultType::COMPLETE),
+            meta: None,
+        }
     }
 }
 
@@ -722,6 +767,7 @@ impl Default for ResultType {
 impl ResultType {
     pub const COMPLETE: Self = Self(Cow::Borrowed("complete"));
     pub const INPUT_REQUIRED: Self = Self(Cow::Borrowed("input_required"));
+    pub const TASK: Self = Self(Cow::Borrowed("task"));
 
     pub fn as_str(&self) -> &str {
         &self.0
@@ -967,8 +1013,12 @@ pub type DiscoverRequest = Request<DiscoverRequestMethod, EmptyObject>;
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct DiscoverResult {
-    #[serde(rename = "resultType", default)]
-    pub result_type: ResultType,
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     pub supported_versions: Vec<ProtocolVersion>,
     pub capabilities: ServerCapabilities,
     pub server_info: Implementation,
@@ -992,7 +1042,7 @@ impl DiscoverResult {
         capabilities: ServerCapabilities,
     ) -> Self {
         Self {
-            result_type: ResultType::COMPLETE,
+            result_type: Some(ResultType::COMPLETE),
             supported_versions: supported_versions.into(),
             capabilities,
             server_info: Implementation::from_build_env(),
@@ -1093,6 +1143,12 @@ pub type InitializeRequestParam = InitializeRequestParams;
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct InitializeResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     /// The MCP protocol version this server supports
     pub protocol_version: ProtocolVersion,
     /// The capabilities this server provides (tools, resources, prompts, etc.)
@@ -1110,6 +1166,7 @@ impl InitializeResult {
     /// Create a new `InitializeResult` with default protocol version and the given capabilities.
     pub fn new(capabilities: ServerCapabilities) -> Self {
         Self {
+            result_type: Some(ResultType::COMPLETE),
             protocol_version: ProtocolVersion::default(),
             capabilities,
             server_info: Implementation::from_build_env(),
@@ -1144,6 +1201,7 @@ pub type ClientInfo = InitializeRequestParams;
 impl Default for ServerInfo {
     fn default() -> Self {
         ServerInfo {
+            result_type: Some(ResultType::COMPLETE),
             protocol_version: ProtocolVersion::default(),
             capabilities: ServerCapabilities::default(),
             server_info: Implementation::from_build_env(),
@@ -1430,6 +1488,8 @@ macro_rules! paginated_result {
         #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
         #[expect(clippy::exhaustive_structs, reason = "intentionally exhaustive")]
         pub struct $t {
+            #[serde(rename = "resultType", default, skip_serializing_if = "Option::is_none")]
+            pub result_type: Option<ResultType>,
             #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
             pub meta: Option<Meta>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1450,6 +1510,7 @@ macro_rules! paginated_result {
         impl $t {
             pub fn with_all_items(items: $t_item) -> Self {
                 Self {
+                    result_type: Some(ResultType::COMPLETE),
                     meta: None,
                     next_cursor: None,
                     ttl_ms: None,
@@ -1562,6 +1623,12 @@ pub type ReadResourceRequestParam = ReadResourceRequestParams;
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct ReadResourceResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     /// Time, in milliseconds, that this result may be treated as fresh (SEP-2549).
     #[serde(
         default,
@@ -1582,6 +1649,7 @@ impl ReadResourceResult {
     /// Create a new ReadResourceResult with the given contents.
     pub fn new(contents: Vec<ResourceContents>) -> Self {
         Self {
+            result_type: Some(ResultType::COMPLETE),
             ttl_ms: None,
             cache_scope: None,
             contents,
@@ -2766,6 +2834,12 @@ impl CompletionInfo {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct CompleteResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     pub completion: CompletionInfo,
     #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
@@ -2775,6 +2849,7 @@ impl CompleteResult {
     /// Create a new CompleteResult with the given completion info.
     pub fn new(completion: CompletionInfo) -> Self {
         Self {
+            result_type: Some(ResultType::COMPLETE),
             completion,
             meta: None,
         }
@@ -2952,6 +3027,12 @@ pub type ListRootsRequest = RequestNoParam<ListRootsRequestMethod>;
     note = "Roots is deprecated by SEP-2577 and will be removed in a future release. See https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2577"
 )]
 pub struct ListRootsResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     pub roots: Vec<Root>,
     #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
@@ -2960,7 +3041,11 @@ pub struct ListRootsResult {
 impl ListRootsResult {
     /// Creates a new `ListRootsResult` with the given roots.
     pub fn new(roots: Vec<Root>) -> Self {
-        Self { roots, meta: None }
+        Self {
+            result_type: Some(ResultType::COMPLETE),
+            roots,
+            meta: None,
+        }
     }
 
     /// Sets the protocol-level metadata for this result.
@@ -3170,6 +3255,12 @@ pub type CreateElicitationRequestParams = ElicitRequestParams;
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct ElicitResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     /// The user's decision on how to handle the elicitation request
     pub action: ElicitationAction,
 
@@ -3188,6 +3279,7 @@ impl ElicitResult {
     /// Create a new ElicitResult.
     pub fn new(action: ElicitationAction) -> Self {
         Self {
+            result_type: Some(ResultType::COMPLETE),
             action,
             content: None,
             meta: None,
@@ -3257,6 +3349,12 @@ pub type ElicitationCompletionNotification = ElicitationCompleteNotification;
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct CallToolResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     /// The content returned by the tool (text, images, etc.)
     #[serde(default)]
     pub content: Vec<ContentBlock>,
@@ -3284,6 +3382,8 @@ impl<'de> Deserialize<'de> for CallToolResult {
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct Helper {
+            #[serde(rename = "resultType", default)]
+            result_type: Option<ResultType>,
             content: Option<Vec<ContentBlock>>,
             structured_content: Option<Value>,
             is_error: Option<bool>,
@@ -3305,6 +3405,7 @@ impl<'de> Deserialize<'de> for CallToolResult {
         }
 
         Ok(CallToolResult {
+            result_type: helper.result_type,
             content: helper.content.unwrap_or_default(),
             structured_content: helper.structured_content,
             is_error: helper.is_error,
@@ -3317,6 +3418,7 @@ impl CallToolResult {
     /// Create a successful tool result with unstructured content
     pub fn success(content: Vec<ContentBlock>) -> Self {
         CallToolResult {
+            result_type: Some(ResultType::COMPLETE),
             content,
             structured_content: None,
             is_error: Some(false),
@@ -3374,6 +3476,7 @@ impl CallToolResult {
     /// ```
     pub fn error(content: Vec<ContentBlock>) -> Self {
         CallToolResult {
+            result_type: Some(ResultType::COMPLETE),
             content,
             structured_content: None,
             is_error: Some(true),
@@ -3396,6 +3499,7 @@ impl CallToolResult {
     /// ```
     pub fn structured(value: Value) -> Self {
         CallToolResult {
+            result_type: Some(ResultType::COMPLETE),
             content: vec![ContentBlock::text(value.to_string())],
             structured_content: Some(value),
             is_error: Some(false),
@@ -3422,6 +3526,7 @@ impl CallToolResult {
     /// ```
     pub fn structured_error(value: Value) -> Self {
         CallToolResult {
+            result_type: Some(ResultType::COMPLETE),
             content: vec![ContentBlock::text(value.to_string())],
             structured_content: Some(value),
             is_error: Some(true),
@@ -3581,6 +3686,12 @@ pub type CallToolRequest = Request<CallToolRequestMethod, CallToolRequestParams>
     note = "Sampling is deprecated by SEP-2577 and will be removed in a future release. See https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2577"
 )]
 pub struct CreateMessageResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     /// The identifier of the model that generated the response
     pub model: String,
     /// The reason why generation stopped (e.g., "endTurn", "maxTokens")
@@ -3595,6 +3706,7 @@ impl CreateMessageResult {
     /// Create a new CreateMessageResult with required fields.
     pub fn new(message: SamplingMessage, model: String) -> Self {
         Self {
+            result_type: Some(ResultType::COMPLETE),
             message,
             model,
             stop_reason: None,
@@ -3632,6 +3744,12 @@ impl CreateMessageResult {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct GetPromptResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub messages: Vec<PromptMessage>,
@@ -3643,6 +3761,7 @@ impl GetPromptResult {
     /// Create a new GetPromptResult with required fields.
     pub fn new(messages: Vec<PromptMessage>) -> Self {
         Self {
+            result_type: Some(ResultType::COMPLETE),
             description: None,
             messages,
             meta: None,
@@ -3845,6 +3964,12 @@ pub type GetTaskInfoResult = GetTaskResult;
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct ListTasksResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     pub tasks: Vec<crate::model::Task>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
@@ -3855,6 +3980,7 @@ pub struct ListTasksResult {
 impl ListTasksResult {
     pub fn new(tasks: Vec<crate::model::Task>) -> Self {
         Self {
+            result_type: Some(ResultType::COMPLETE),
             tasks,
             next_cursor: None,
             meta: None,
@@ -3986,7 +4112,7 @@ ts_union!(
 
 impl ClientResult {
     pub fn empty(_: ()) -> ClientResult {
-        ClientResult::EmptyResult(EmptyResult {})
+        ClientResult::EmptyResult(EmptyResult::from(()))
     }
 }
 
@@ -4041,7 +4167,7 @@ ts_union!(
 
 impl ServerResult {
     pub fn empty(_: ()) -> ServerResult {
-        ServerResult::EmptyResult(EmptyResult {})
+        ServerResult::EmptyResult(EmptyResult::from(()))
     }
 }
 
@@ -4535,6 +4661,7 @@ mod tests {
     #[test]
     fn test_initialize_with_icons() {
         let init_result = InitializeResult {
+            result_type: Some(ResultType::COMPLETE),
             protocol_version: ProtocolVersion::default(),
             capabilities: ServerCapabilities::default(),
             server_info: Implementation {

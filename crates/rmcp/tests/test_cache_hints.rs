@@ -12,6 +12,7 @@ fn paginated_results_serialize_cache_hints_as_top_level_fields() {
     assert_eq!(
         actual,
         json!({
+            "resultType": "complete",
             "ttlMs": 5000,
             "cacheScope": "private",
             "tools": []
@@ -39,7 +40,7 @@ fn cache_hints_are_omitted_when_absent() {
     let result = ListToolsResult::with_all_items(Vec::new());
     let actual = serde_json::to_value(result).expect("serialize list tools result");
 
-    assert_eq!(actual, json!({ "tools": [] }));
+    assert_eq!(actual, json!({ "resultType": "complete", "tools": [] }));
 }
 
 #[test]

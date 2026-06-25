@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::Meta;
+use super::{Meta, ResultType};
 
 /// Metadata for augmenting a request with task execution (spec `TaskMetadata`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -137,6 +137,12 @@ impl Task {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct CreateTaskResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     pub task: Task,
     #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
@@ -145,7 +151,11 @@ pub struct CreateTaskResult {
 impl CreateTaskResult {
     /// Create a new CreateTaskResult.
     pub fn new(task: Task) -> Self {
-        Self { task, meta: None }
+        Self {
+            result_type: Some(ResultType::COMPLETE),
+            task,
+            meta: None,
+        }
     }
 
     /// Sets the protocol-level metadata for this result.
@@ -164,6 +174,12 @@ impl CreateTaskResult {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct GetTaskResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
     #[serde(flatten)]
@@ -172,7 +188,11 @@ pub struct GetTaskResult {
 
 impl GetTaskResult {
     pub fn new(task: Task) -> Self {
-        Self { meta: None, task }
+        Self {
+            result_type: Some(ResultType::COMPLETE),
+            meta: None,
+            task,
+        }
     }
 }
 
@@ -221,6 +241,12 @@ impl<'de> serde::Deserialize<'de> for GetTaskPayloadResult {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[non_exhaustive]
 pub struct CancelTaskResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
     #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
     #[serde(flatten)]
@@ -229,6 +255,10 @@ pub struct CancelTaskResult {
 
 impl CancelTaskResult {
     pub fn new(task: Task) -> Self {
-        Self { meta: None, task }
+        Self {
+            result_type: Some(ResultType::COMPLETE),
+            meta: None,
+            task,
+        }
     }
 }

@@ -194,6 +194,10 @@ mod untagged_server_result {
             matches!(result, ServerResult::InitializeResult(_)),
             "expected InitializeResult, got {result:?}"
         );
+        let ServerResult::InitializeResult(result) = result else {
+            unreachable!();
+        };
+        assert_eq!(result.result_type, None);
     }
 
     #[test]
@@ -216,6 +220,21 @@ mod untagged_server_result {
             matches!(result, ServerResult::EmptyResult(_)),
             "expected EmptyResult, got {result:?}"
         );
+        let ServerResult::EmptyResult(result) = result else {
+            unreachable!();
+        };
+        assert_eq!(result.result_type, None);
+    }
+
+    #[test]
+    fn complete_result_type_only_deserializes_to_empty_result() {
+        let result = parse_result(wrap_response(json!({
+            "resultType": "complete"
+        })));
+        assert!(
+            matches!(result, ServerResult::EmptyResult(_)),
+            "expected EmptyResult, got {result:?}"
+        );
     }
 
     #[test]
@@ -225,6 +244,18 @@ mod untagged_server_result {
         let result = parse_result(wrap_response(json!({
             "some_unknown_field": "some_value",
             "number": 42
+        })));
+        assert!(
+            matches!(result, ServerResult::CustomResult(_)),
+            "expected CustomResult, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn extension_result_type_falls_through_to_custom_result() {
+        let result = parse_result(wrap_response(json!({
+            "resultType": "task",
+            "taskId": "task-1"
         })));
         assert!(
             matches!(result, ServerResult::CustomResult(_)),
@@ -257,6 +288,7 @@ mod untagged_server_result {
         let result = parse_result(wrap_response(json.clone()));
         assert!(matches!(&result, ServerResult::InitializeResult(_)));
         let reserialized = serde_json::to_value(&result).unwrap();
+        assert!(reserialized.get("resultType").is_none());
         let result2 = parse_result(wrap_response(reserialized));
         assert!(matches!(result2, ServerResult::InitializeResult(_)));
     }
@@ -266,6 +298,7 @@ mod untagged_server_result {
         let original =
             CallToolResult::success(vec![rmcp::model::ContentBlock::text("hello world")]);
         let json = serde_json::to_value(&original).unwrap();
+        assert_eq!(json["resultType"], "complete");
         let result = parse_result(wrap_response(json));
         assert!(matches!(result, ServerResult::CallToolResult(_)));
     }

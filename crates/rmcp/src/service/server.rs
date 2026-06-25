@@ -200,7 +200,7 @@ where
             {
                 transport
                     .send(ServerJsonRpcMessage::response(
-                        ServerResult::EmptyResult(EmptyResult {}),
+                        ServerResult::EmptyResult(EmptyResult::from(())),
                         req.id,
                     ))
                     .await
