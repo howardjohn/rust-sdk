@@ -52,7 +52,7 @@ fn primitive_to_string(value: &Value) -> Option<String> {
 /// True if `value` must be Base64-wrapped to survive as an HTTP header value:
 /// leading/trailing space or tab, control/non-ASCII characters, or a value that
 /// already looks like the `=?base64?...?=` sentinel.
-#[cfg(feature = "client-side-sse")]
+#[cfg(any(feature = "client-side-sse", feature = "server-side-http"))]
 fn requires_base64(value: &str) -> bool {
     if value.is_empty() {
         return false;
@@ -170,7 +170,7 @@ fn reject_nested_annotations(schema: &Value, path: &str) -> Result<(), String> {
 }
 
 /// Wraps a value as `=?base64?<b64>?=` when it cannot travel as a bare header value.
-#[cfg(feature = "client-side-sse")]
+#[cfg(any(feature = "client-side-sse", feature = "server-side-http"))]
 pub fn encode_header_value(value: &str) -> String {
     use base64::{Engine, prelude::BASE64_STANDARD};
     if requires_base64(value) {
@@ -252,7 +252,7 @@ pub(crate) fn standard_request_headers(
 /// Validates incoming SEP-2243 headers against the request body.
 ///
 /// Returns `Err(reason)` when a required header is missing or its value does not
-/// match the body; the caller maps this to a JSON-RPC `-32001` error (HTTP 400).
+/// match the body; the caller maps this to a JSON-RPC `-32020` error (HTTP 400).
 #[cfg(feature = "server-side-http")]
 pub(crate) fn validate_request_headers(
     headers: &http::HeaderMap,
