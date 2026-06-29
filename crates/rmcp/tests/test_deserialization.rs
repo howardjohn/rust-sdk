@@ -1,6 +1,7 @@
 use rmcp::model::{
-    CallToolRequestParams, ClientJsonRpcMessage, ClientRequest, GetPromptRequestParams,
-    JsonRpcResponse, ReadResourceRequestParams, ServerJsonRpcMessage, ServerResult,
+    CallToolRequestParams, ClientJsonRpcMessage, ClientRequest, GetMeta, GetPromptRequestParams,
+    JsonRpcResponse, ReadResourceRequestParams, ServerJsonRpcMessage, ServerNotification,
+    ServerResult,
 };
 use serde_json::json;
 
@@ -47,6 +48,90 @@ fn test_discover_result() {
             ..
         })
     ));
+}
+
+#[test]
+fn test_subscriptions_listen_request() {
+    let message: ClientJsonRpcMessage = serde_json::from_value(json!({
+        "jsonrpc": "2.0",
+        "id": "sub-1",
+        "method": "subscriptions/listen",
+        "params": {
+            "notifications": {
+                "toolsListChanged": true,
+                "promptsListChanged": true,
+                "resourcesListChanged": true,
+                "resourceSubscriptions": ["file:///tmp/test.txt"]
+            }
+        }
+    }))
+    .unwrap();
+
+    assert!(matches!(
+        message,
+        ClientJsonRpcMessage::Request(r)
+            if matches!(r.request, ClientRequest::SubscriptionsListenRequest(_))
+    ));
+}
+
+#[test]
+fn test_subscriptions_listen_result() {
+    let message: ServerJsonRpcMessage = serde_json::from_value(json!({
+        "jsonrpc": "2.0",
+        "id": "sub-1",
+        "result": {
+            "resultType": "complete",
+            "_meta": {
+                "io.modelcontextprotocol/subscriptionId": "sub-1"
+            }
+        }
+    }))
+    .unwrap();
+
+    let ServerJsonRpcMessage::Response(JsonRpcResponse {
+        result: ServerResult::SubscriptionsListenResult(result),
+        ..
+    }) = message
+    else {
+        panic!("expected SubscriptionsListenResult");
+    };
+
+    assert_eq!(result.meta.subscription_id.to_string(), "sub-1");
+}
+
+#[test]
+fn test_subscriptions_acknowledged_notification() {
+    let message: ServerJsonRpcMessage = serde_json::from_value(json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/subscriptions/acknowledged",
+        "params": {
+            "_meta": {
+                "io.modelcontextprotocol/subscriptionId": "sub-1"
+            },
+            "notifications": {
+                "toolsListChanged": true
+            }
+        }
+    }))
+    .unwrap();
+
+    let ServerJsonRpcMessage::Notification(notification) = message else {
+        panic!("expected SubscriptionsAcknowledgedNotification");
+    };
+
+    assert!(matches!(
+        notification.notification,
+        ServerNotification::SubscriptionsAcknowledgedNotification(_)
+    ));
+    assert_eq!(
+        notification
+            .notification
+            .get_meta()
+            .subscription_id()
+            .as_ref()
+            .map(ToString::to_string),
+        Some("sub-1".to_string())
+    );
 }
 
 #[test]

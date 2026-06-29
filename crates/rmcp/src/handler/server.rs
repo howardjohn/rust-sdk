@@ -65,6 +65,9 @@ impl<H: ServerHandler> Service<RoleServer> for H {
                 .read_resource(request.params, context)
                 .await
                 .map(ServerResult::ReadResourceResult),
+            ClientRequest::SubscriptionsListenRequest(_request) => {
+                Err(McpError::method_not_found::<SubscriptionsListenRequestMethod>())
+            }
             ClientRequest::SubscribeRequest(request) => self
                 .subscribe(request.params, context)
                 .await

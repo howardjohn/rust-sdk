@@ -6,7 +6,7 @@ use serde_json::Value;
 use super::{
     ClientCapabilities, ClientNotification, ClientRequest, CustomNotification, CustomRequest,
     Extensions, Implementation, JsonObject, JsonRpcMessage, LoggingLevel, NumberOrString,
-    ProgressToken, ProtocolVersion, ServerNotification, ServerRequest, TaskMetadata,
+    ProgressToken, ProtocolVersion, RequestId, ServerNotification, ServerRequest, TaskMetadata,
 };
 
 pub trait GetMeta {
@@ -149,6 +149,7 @@ variant_extension! {
         ListResourcesRequest
         ListResourceTemplatesRequest
         ReadResourceRequest
+        SubscriptionsListenRequest
         SubscribeRequest
         UnsubscribeRequest
         CallToolRequest
@@ -191,6 +192,7 @@ variant_extension! {
         ResourceListChangedNotification
         ToolListChangedNotification
         PromptListChangedNotification
+        SubscriptionsAcknowledgedNotification
         ElicitationCompleteNotification
         TaskStatusNotification
         CustomNotification
@@ -211,6 +213,8 @@ pub const META_KEY_CLIENT_INFO: &str = "io.modelcontextprotocol/clientInfo";
 pub const META_KEY_CLIENT_CAPABILITIES: &str = "io.modelcontextprotocol/clientCapabilities";
 /// `_meta` key carrying the requested per-request log level.
 pub const META_KEY_LOG_LEVEL: &str = "io.modelcontextprotocol/logLevel";
+/// `_meta` key identifying the subscription stream that carried a notification.
+pub const META_KEY_SUBSCRIPTION_ID: &str = "io.modelcontextprotocol/subscriptionId";
 
 impl Meta {
     pub fn new() -> Self {
@@ -302,6 +306,16 @@ impl Meta {
     /// Set the requested per-request log level carried in `_meta`.
     pub fn set_log_level(&mut self, log_level: LoggingLevel) {
         self.insert_serialized(META_KEY_LOG_LEVEL, log_level);
+    }
+
+    /// Get the subscription stream id carried in `_meta`, if present and valid.
+    pub fn subscription_id(&self) -> Option<RequestId> {
+        self.decode_value(META_KEY_SUBSCRIPTION_ID)
+    }
+
+    /// Set the subscription stream id carried in `_meta`.
+    pub fn set_subscription_id(&mut self, subscription_id: RequestId) {
+        self.insert_serialized(META_KEY_SUBSCRIPTION_ID, subscription_id);
     }
 
     pub fn extend(&mut self, other: Meta) {

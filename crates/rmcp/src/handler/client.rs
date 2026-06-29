@@ -73,6 +73,10 @@ impl<H: ClientHandler> Service<RoleClient> for H {
             ServerNotification::TaskStatusNotification(notification) => {
                 self.on_task_status(notification.params, context).await
             }
+            ServerNotification::SubscriptionsAcknowledgedNotification(notification) => {
+                self.on_subscriptions_acknowledged(notification.params, context)
+                    .await
+            }
             ServerNotification::CustomNotification(notification) => {
                 self.on_custom_notification(notification, context).await
             }
@@ -257,6 +261,13 @@ pub trait ClientHandler: Sized + Send + Sync + 'static {
     ) -> impl Future<Output = ()> + MaybeSendFuture + '_ {
         std::future::ready(())
     }
+    fn on_subscriptions_acknowledged(
+        &self,
+        params: SubscriptionsAcknowledgedNotificationParams,
+        context: NotificationContext<RoleClient>,
+    ) -> impl Future<Output = ()> + MaybeSendFuture + '_ {
+        std::future::ready(())
+    }
     fn on_custom_notification(
         &self,
         notification: CustomNotification,
@@ -383,6 +394,14 @@ macro_rules! impl_client_handler_for_wrapper {
                 context: NotificationContext<RoleClient>,
             ) -> impl Future<Output = ()> + MaybeSendFuture + '_ {
                 (**self).on_task_status(params, context)
+            }
+
+            fn on_subscriptions_acknowledged(
+                &self,
+                params: SubscriptionsAcknowledgedNotificationParams,
+                context: NotificationContext<RoleClient>,
+            ) -> impl Future<Output = ()> + MaybeSendFuture + '_ {
+                (**self).on_subscriptions_acknowledged(params, context)
             }
 
             fn on_custom_notification(

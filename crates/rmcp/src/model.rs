@@ -1678,6 +1678,163 @@ const_string!(ResourceListChangedNotificationMethod = "notifications/resources/l
 pub type ResourceListChangedNotification =
     NotificationNoParam<ResourceListChangedNotificationMethod>;
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct SubscriptionFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools_list_changed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompts_list_changed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resources_list_changed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_subscriptions: Option<Vec<String>>,
+}
+
+impl SubscriptionFilter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_tools_list_changed(mut self, tools_list_changed: bool) -> Self {
+        self.tools_list_changed = Some(tools_list_changed);
+        self
+    }
+
+    pub fn with_prompts_list_changed(mut self, prompts_list_changed: bool) -> Self {
+        self.prompts_list_changed = Some(prompts_list_changed);
+        self
+    }
+
+    pub fn with_resources_list_changed(mut self, resources_list_changed: bool) -> Self {
+        self.resources_list_changed = Some(resources_list_changed);
+        self
+    }
+
+    pub fn with_resource_subscriptions(
+        mut self,
+        resource_subscriptions: impl Into<Vec<String>>,
+    ) -> Self {
+        self.resource_subscriptions = Some(resource_subscriptions.into());
+        self
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct SubscriptionsListenRequestParams {
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+    pub notifications: SubscriptionFilter,
+}
+
+impl SubscriptionsListenRequestParams {
+    pub fn new(notifications: SubscriptionFilter) -> Self {
+        Self {
+            meta: None,
+            notifications,
+        }
+    }
+
+    pub fn with_meta(mut self, meta: Meta) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+}
+
+impl RequestParamsMeta for SubscriptionsListenRequestParams {
+    fn meta(&self) -> Option<&Meta> {
+        self.meta.as_ref()
+    }
+    fn meta_mut(&mut self) -> &mut Option<Meta> {
+        &mut self.meta
+    }
+}
+
+const_string!(SubscriptionsListenRequestMethod = "subscriptions/listen");
+pub type SubscriptionsListenRequest =
+    Request<SubscriptionsListenRequestMethod, SubscriptionsListenRequestParams>;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct SubscriptionsListenResultMeta {
+    #[serde(rename = "io.modelcontextprotocol/subscriptionId")]
+    pub subscription_id: RequestId,
+    #[serde(flatten)]
+    pub extra: JsonObject,
+}
+
+impl SubscriptionsListenResultMeta {
+    pub fn new(subscription_id: RequestId) -> Self {
+        Self {
+            subscription_id,
+            extra: JsonObject::new(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct SubscriptionsListenResult {
+    #[serde(
+        rename = "resultType",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub result_type: Option<ResultType>,
+    #[serde(rename = "_meta")]
+    pub meta: SubscriptionsListenResultMeta,
+}
+
+impl SubscriptionsListenResult {
+    pub fn new(subscription_id: RequestId) -> Self {
+        Self {
+            result_type: Some(ResultType::COMPLETE),
+            meta: SubscriptionsListenResultMeta::new(subscription_id),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
+pub struct SubscriptionsAcknowledgedNotificationParams {
+    #[serde(rename = "_meta", default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<Meta>,
+    pub notifications: SubscriptionFilter,
+}
+
+impl SubscriptionsAcknowledgedNotificationParams {
+    pub fn new(notifications: SubscriptionFilter) -> Self {
+        Self {
+            meta: None,
+            notifications,
+        }
+    }
+
+    pub fn with_meta(mut self, meta: Meta) -> Self {
+        self.meta = Some(meta);
+        self
+    }
+}
+
+const_string!(
+    SubscriptionsAcknowledgedNotificationMethod = "notifications/subscriptions/acknowledged"
+);
+pub type SubscriptionsAcknowledgedNotification = Notification<
+    SubscriptionsAcknowledgedNotificationMethod,
+    SubscriptionsAcknowledgedNotificationParams,
+>;
+
 const_string!(SubscribeRequestMethod = "resources/subscribe");
 /// Parameters for subscribing to resource updates
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -4054,6 +4211,7 @@ ts_union!(
     | ListResourcesRequest
     | ListResourceTemplatesRequest
     | ReadResourceRequest
+    | SubscriptionsListenRequest
     | SubscribeRequest
     | UnsubscribeRequest
     | CallToolRequest
@@ -4078,6 +4236,7 @@ impl ClientRequest {
             ClientRequest::ListResourcesRequest(r) => r.method.as_str(),
             ClientRequest::ListResourceTemplatesRequest(r) => r.method.as_str(),
             ClientRequest::ReadResourceRequest(r) => r.method.as_str(),
+            ClientRequest::SubscriptionsListenRequest(r) => r.method.as_str(),
             ClientRequest::SubscribeRequest(r) => r.method.as_str(),
             ClientRequest::UnsubscribeRequest(r) => r.method.as_str(),
             ClientRequest::CallToolRequest(r) => r.method.as_str(),
@@ -4136,6 +4295,7 @@ ts_union!(
     | ResourceListChangedNotification
     | ToolListChangedNotification
     | PromptListChangedNotification
+    | SubscriptionsAcknowledgedNotification
     | ElicitationCompleteNotification
     | TaskStatusNotification
     | CustomNotification;
@@ -4151,6 +4311,7 @@ ts_union!(
     | ListResourcesResult
     | ListResourceTemplatesResult
     | ReadResourceResult
+    | SubscriptionsListenResult
     | ListToolsResult
     | ElicitResult
     | CreateTaskResult

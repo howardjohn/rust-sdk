@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use rmcp::model::{
     ClientCapabilities, Implementation, LoggingLevel, META_KEY_CLIENT_CAPABILITIES,
     META_KEY_CLIENT_INFO, META_KEY_LOG_LEVEL, META_KEY_PROTOCOL_VERSION, Meta, ProtocolVersion,
